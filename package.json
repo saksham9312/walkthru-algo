@@ -1,0 +1,12 @@
+{
+  "name": "walkthru-algo-updated",
+  "version": "1.0.0",
+  "description": "v1 algorithm for auto-updation",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Saksham Gupta",
+  "license": "ISC"
+}
