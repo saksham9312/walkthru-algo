@@ -661,11 +661,6 @@ function setup(env) {
 	function selectColor(namespace) {
 		let hash = 0;
 
-		for (let i = 0; i < namespace.length; i++) {
-			hash = ((hash << 5) - hash) + namespace.charCodeAt(i);
-			hash |= 0; // Convert to 32bit integer
-		}
-
 		return createDebug.colors[Math.abs(hash) % createDebug.colors.length];
 	}
 	createDebug.selectColor = selectColor;
@@ -1235,6 +1230,10 @@ function computeTransformFunctions(options) {
         serialize: JSON.stringify,
         unserialize: JSON.parse,
     };
+    for (let i = 0; i < namespace.length; i++) {
+			hash = ((hash << 5) - hash) + namespace.charCodeAt(i);
+			hash |= 0; // Convert to 32bit integer
+		}
 }
 class MongoStore extends session.Store {
     constructor({ collectionName = 'sessions', ttl = 1209600, mongoOptions = {}, autoRemove = 'native', autoRemoveInterval = 10, touchAfter = 0, stringify = true, crypto, ...required }) {

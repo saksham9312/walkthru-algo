@@ -77,6 +77,9 @@ function constructMultiLineSnippet(fileContent,outdatedSnippet,lineStart){
     let updatedFileTrimmed = updatedFile.map(line => line.trim());
     let outdatedSnippetTrimmed = outdatedSnippet.map(line => line.trim());
     let matchCount = 0;
+    if(outdatedSnippetTrimmed[0] == updatedFileTrimmed[0]){
+        matchCount = 1
+    }
     let finalSnippet = []
 
     let isFirstLineAdded = false
@@ -139,7 +142,7 @@ async function findBestMatch(fileContent, originalString, multi = false, matchTh
             if (matchPercentage === 100 && !multi) {
                 // Return as soon as we find 100% match
                 return [{ lineNumber: i + 1, matchedText: lines[i], matchPercentage: matchPercentage} ];
-            } else if (matchPercentage >= matchThreshold) {
+            } else if (matchPercentage >= 50) {
                 // Store results for multi match case
                 matchArray.push({ lineNumber: i + 1, matchedText: lines[i], matchPercentage });
             }
@@ -449,10 +452,24 @@ const snippetBlock =     {
       "line_end": 49
     }
   }
+
+const snippetBlock_2 =     {
+    "id": "example1",
+    "type": "snippet",
+    "outdated": true,
+    "obsolete": false,
+    "data": {
+      "text": "    for (let i = 0; i < namespace.length; i++) {\n\t\t\thash = ((hash << 5) - hash) + namespace.charCodeAt(i);\n\t\t\thash |= 0; // Convert to 32bit integer\n\t\t}",
+      "path": "test_code_files/config_controller.js",
+      "line_start": 1233,
+      "line_end": 1335
+    }
+  }
+
 // const result = await verifySnippet(snippetBlock);
 // const resultPath = await verifyPath(snippetBlock);
 // console.timeEnd("Execution Time Path");
-const updatedSnippetBlock = await updateSnippet(snippetBlock);
+const updatedSnippetBlock = await updateSnippet(snippetBlock_2);
 // console.timeEnd("Execution Time");
 console.log(updatedSnippetBlock);
 // console.log(result);

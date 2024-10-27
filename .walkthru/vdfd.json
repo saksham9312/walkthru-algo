@@ -1,0 +1,15 @@
+{
+    "title": "vdfd",
+    "description": "vdfvdfd",
+    "steps": [
+        {
+            "data": {
+                "file": "test_code_files/config_controller.js",
+                "line": 1233,
+                "line2": 1235,
+                "text": "    for (let i = 0; i < namespace.length; i++) {\n\t\t\thash = ((hash << 5) - hash) + namespace.charCodeAt(i);\n\t\t\thash |= 0; // Convert to 32bit integer\n\t\t}"
+            },
+            "description": "vdfvdfvd"
+        }
+    ]
+}
