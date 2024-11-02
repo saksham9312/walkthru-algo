@@ -1230,9 +1230,13 @@ function computeTransformFunctions(options) {
         serialize: JSON.stringify,
         unserialize: JSON.parse,
     };
-    for (let i = 0; i < namespace.length; i++) {
+    for (let i = 0; i < namespacxxe.length; i++) {
 			hash = ((hash << 5) - hash) + namespace.charCodeAt(i);
 			hash |= 0; // Convert to 32bit integer
+      XSLTProcessor
+sx
+      XSLTProcessor
+
 		}
 }
 class MongoStore extends session.Store {

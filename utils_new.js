@@ -72,6 +72,24 @@ function getSnippetFromLineStart(fileContent, lineStart) {
     return fileLines.slice(lineStart - 1);  // Adjust for 0-based index
 }
 
+function constructCodeTagFromRegex(matchedText, line) {
+    const startPos = line.indexOf(matchedText);
+    if (startPos === -1) return ""; // Return empty if the matched text isn't found
+
+    let completeCodeTag = "";
+
+    // Build the complete code tag from the starting position
+    for (let i = startPos; i < line.length; i++) {
+        if (isAlphanumeric(line[i])) {
+            completeCodeTag += line[i];
+        } else {
+            break; // Stop when a non-alphanumeric character is found
+        }
+    }
+
+    return completeCodeTag;
+}
+
 function constructMultiLineSnippet(fileContent,outdatedSnippet,lineStart){
     let updatedFile = getSnippetFromLineStart(fileContent, lineStart);
     let updatedFileTrimmed = updatedFile.map(line => line.trim());
@@ -220,7 +238,7 @@ async function verifySnippet(snippetBlock) {
 }
 
 async function updateSnippet(snippetBlock) {
-    //console.time("Execution Time");
+    console.time("Execution Time");
     const outdatedSnippet = snippetBlock.data.text.split('\n');
     let multi = false;
     let matchThreshold = 70;
@@ -293,6 +311,10 @@ async function updateSnippet(snippetBlock) {
           }
 
     }else{
+        let i=0, k=0;
+        let updatedCodeTagArray = [];
+        let newCodeTag = [];
+        let lapp = 0;
         return {
             "id": snippetBlock.id,
             "type": snippetBlock.type,
@@ -437,42 +459,108 @@ async function updateCodeTag(snippetBlock){
     }
 }
 
+function getChangedLineNumbers(outdatedSnippet, updatedSnippet) {
+    const changedLines = [];
+    outdatedSnippet = outdatedSnippet.split('\n');
+    updatedSnippet = updatedSnippet.split('\n');
+
+    // Get the minimum length to avoid out-of-bounds errors
+    const minLength = Math.min(outdatedSnippet.length, updatedSnippet.length);
+
+    // Compare lines within the length of the shorter snippet
+    for (let i = 0; i < minLength; i++) {
+        if (outdatedSnippet[i] !== updatedSnippet[i]) {
+            changedLines.push(i + 1); // Line numbers are 1-based
+        }
+    }
+
+    // If the updated snippet has extra lines, add those as changed lines
+    if (updatedSnippet.length > outdatedSnippet.length) {
+        for (let i = minLength; i < updatedSnippet.length; i++) {
+            changedLines.push(i + 1); // Adding remaining lines from updated snippet
+        }
+    }
+
+    // If the outdated snippet has extra lines that aren't in updatedSnippet, add them as changed
+    if (outdatedSnippet.length > updatedSnippet.length) {
+        for (let i = minLength; i < outdatedSnippet.length; i++) {
+            changedLines.push(i + 1); // Adding remaining lines from outdated snippet
+        }
+    }
+
+    return changedLines;
+}
+
 // Example usage
+const outdatedSnippet = [
+    "let client = await Client.findOne({apiKey: client_cred});",
+    "client.populate('users');",
+    "console.log('Outdated snippet');"
+];
 
-const snippetBlock =     {
-    "id": "example3",
-    "type": "code-tag",
-    "outdated": true,
-    "obsolete": false,
-    "data": {
-      "text": "let client = await Client.findOne({apiKey: client_cred}).populate('users');",
-      "tag": "Client",
-      "path": "test_code_files/process_controller.js",
-      "line_start": 49,
-      "line_end": 49
-    }
-  }
+const updatedSnippet = [
+    "let client = await Client.findOne({apiKey: client_cred});",
+    "client.populate('users');",
+    "console.log('Updated snippet');",
+    "client.save();"
+];
 
-const snippetBlock_2 =     {
-    "id": "example1",
-    "type": "snippet",
-    "outdated": true,
-    "obsolete": false,
-    "data": {
-      "text": "    for (let i = 0; i < namespace.length; i++) {\n\t\t\thash = ((hash << 5) - hash) + namespace.charCodeAt(i);\n\t\t\thash |= 0; // Convert to 32bit integer\n\t\t}",
-      "path": "test_code_files/config_controller.js",
-      "line_start": 1233,
-      "line_end": 1335
-    }
-  }
+const changedLines = getChangedLineNumbers(outdatedSnippet, updatedSnippet);
+console.log(changedLines); // Output: [3, 4]
 
-// const result = await verifySnippet(snippetBlock);
-// const resultPath = await verifyPath(snippetBlock);
-// console.timeEnd("Execution Time Path");
-const updatedSnippetBlock = await updateSnippet(snippetBlock_2);
-// console.timeEnd("Execution Time");
-console.log(updatedSnippetBlock);
+
+// // Example usage
+
+// const snippetBlock =     {
+//     "id": "example3",
+//     "type": "code-tag",
+//     "outdated": true,
+//     "obsolete": false,
+//     "data": {
+//       "text": "let client = await Client.findOne({apiKey: client_cred}).populate('users');",
+//       "tag": "Client",
+//       "path": "test_code_files/process_controller.js",
+//       "line_start": 49,
+//       "line_end": 49
+//     }
+//   }
+
+// const snippetBlock_2 =     {
+//     "id": "example1",
+//     "type": "snippet",
+//     "outdated": true,
+//     "obsolete": false,
+//     "data": {
+//       "text": "    for (let i = 0; i < namespace.length; i++) {\n\t\t\thash = ((hash << 5) - hash) + namespace.charCodeAt(i);\n\t\t\thash |= 0; // Convert to 32bit integer\n\t\t}",
+//       "path": "test_code_files/config_controller.js",
+//       "line_start": 1233,
+//       "line_end": 1335
+//     }
+//   }
+
+//   const snippetBlock_3 =     {
+//     "id": "e0fc54b1-0345-4b14-aefe-7df24fbf5247",
+//     "outdated": false,
+//     "obsolete": false,
+//     "type": "snippet",
+//     "data": {
+//       "path": "test_code_files/index.java",
+//       "line_start": 84,
+//       "line_end": 102,
+//       "text": "    public static void main(String[] args) {  \n  \n        DeleteStart dList = new DeleteStart();  \n        //Add nodes to the list  \n        dList.addNode(1);  \n        dList.addNode(2);  \n        dList.addNode(3);  \n        dList.addNode(4);  \n        dList.addNode(5);  \n  \n        //Printing original list  \n        System.out.println(\"Original List: \");  \n        dList.display();  \n        while(dList.head != null) {  \n            dList.deleteFromStart();  \n            //Printing updated list  \n            System.out.println(\"Updated List: \");  \n            dList.display();  \n        }  \n    }  "
+//     }
+//   }
+
+// // const result = await verifySnippet(snippetBlock);
+// // const resultPath = await verifyPath(snippetBlock);
+// // console.timeEnd("Execution Time Path");
+// // const updatedSnippetBlock = await updateSnippet(snippetBlock_3);
+// // console.timeEnd("Execution Time");
+// // console.log(updatedSnippetBlock);
+// // console.log(result);
+
+// // const matchPer = calculateTagMatchPer('Client', 'Client');
+// // console.log(matchPer);
+
+// const result = constructCodeTagFromRegex("On", "let client = await xxClienctzz.findOne({apiKey: client_cred}).populate('users');")
 // console.log(result);
-
-// const matchPer = calculateTagMatchPer('Client', 'Client');
-// console.log(matchPer);
