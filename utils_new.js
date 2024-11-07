@@ -159,8 +159,9 @@ async function findBestMatch(fileContent, originalString, multi = false, matchTh
             const matchPercentage = getLevenshteinMatchPercentage(originalString, lines[i]);
             if (matchPercentage === 100 && !multi) {
                 // Return as soon as we find 100% match
+                matchArray = [];
                 return [{ lineNumber: i + 1, matchedText: lines[i], matchPercentage: matchPercentage} ];
-            } else if (matchPercentage >= 50) {
+            } else if (matchPercentage >= matchThreshold) {
                 // Store results for multi match case
                 matchArray.push({ lineNumber: i + 1, matchedText: lines[i], matchPercentage });
             }
@@ -311,10 +312,6 @@ async function updateSnippet(snippetBlock) {
           }
 
     }else{
-        let i=0, k=0;
-        let updatedCodeTagArray = [];
-        let newCodeTag = [];
-        let lapp = 0;
         return {
             "id": snippetBlock.id,
             "type": snippetBlock.type,
@@ -364,100 +361,190 @@ function calculateTagMatchPer(outdatedCodeTag, updatedCodeTag){
     const matchPercentage = (prevContinuousMatch/outdatedCodeTag.length)*100;
     return matchPercentage;
 }
-
-async function updateCodeTag(snippetBlock){
-    console.time("Execution Time");
-    let updatedSnippetBlock = await updateSnippet(snippetBlock);
-    if(updatedSnippetBlock.obsolete) {
-        return {
-            "id": snippetBlock.id,
-            "type": snippetBlock.type,
-            "outdated": snippetBlock['outdated'],
-            "obsolete": true,
-            "data": {
-              "text": snippetBlock.data.text,
-              "path": snippetBlock.data.path,
-              "line_start": snippetBlock.data['line_start'],
-              "line_end": snippetBlock.data['line_end'],
-              "tag": snippetBlock.data.tag
-            }
-          }
-    }
-    let updatedString = updatedSnippetBlock.data.text;
-    let outdatedCodeTag = snippetBlock.data.tag;
-    let updatedLineStart = updatedSnippetBlock.data['line_start'];
-
-    let i=0, k=0;
+function processCodeTag(bestMatchArray, snippetBlock){
+    
     let updatedCodeTagArray = [];
-    let newCodeTag = [];
-    outdatedCodeTag = outdatedCodeTag.split('');
-    updatedString = updatedString.split('');
+    let outdatedCodeTag = snippetBlock.data['tag'].split('');
     let updatedStartPos = null;
+    
+    for(let j=0; j<bestMatchArray.length; j++){
+        let i=0, k=0;
+        let newCodeTag = [];
+        let bestMatchLine = bestMatchArray[j]['matchedText'];
+        bestMatchLine = bestMatchLine.split('');
 
-    while(i<updatedString.length){
-        if(updatedString[i] == outdatedCodeTag[k] && isAlphanumeric(updatedString[i])){
-            if(updatedStartPos == null){
-                updatedStartPos = i;
-            }
-            newCodeTag += updatedString[i];
-            i++;
-            k++;
-        }else if(updatedString[i] != outdatedCodeTag[k] && isAlphanumeric(updatedString[i])){
-            if(updatedStartPos == null){
-                updatedStartPos = i;
-            }
-            newCodeTag += updatedString[i];
-            i++;
-        }else{
-            let matchPercentage = calculateTagMatchPer(outdatedCodeTag.join(''), newCodeTag);
-            if(matchPercentage >= 50){
-                updatedCodeTagArray.push({
-                    updatedCodeTag : newCodeTag,
-                    matchPercentage : matchPercentage
-                });
+        while(i<bestMatchLine.length){
+            if(bestMatchLine[i] == outdatedCodeTag[k] && isAlphanumeric(bestMatchLine[i])){
+                if(updatedStartPos == null){
+                    updatedStartPos = i;
+                }
+                newCodeTag += bestMatchLine[i];
+                i++;
+                k++;
+            }else if(bestMatchLine[i] != outdatedCodeTag[k] && isAlphanumeric(bestMatchLine[i])){
+                if(updatedStartPos == null){
+                    updatedStartPos = i;
+                }
+                newCodeTag += bestMatchLine[i];
+                i++;
+            }else{
+                let matchPercentage = calculateTagMatchPer(outdatedCodeTag.join(''), newCodeTag);
+                if(matchPercentage >= 50){
+                    updatedCodeTagArray.push({
+                        updatedCodeTag : newCodeTag,
+                        codeMatchPercentage : matchPercentage,
+                        lineText : bestMatchLine.join(''),
+                        lineNumber : bestMatchArray[j]['lineNumber']
+                    });
+                    newCodeTag = [];
+                    updatedStartPos = null;
+                    i++;
+                    k = 0;
+                    continue;
+                }
                 newCodeTag = [];
                 updatedStartPos = null;
                 i++;
                 k = 0;
-                continue;
             }
-            newCodeTag = [];
-            updatedStartPos = null;
-            i++;
-            k = 0;
         }
     }
+
     if(updatedCodeTagArray.length > 0){
-        updatedCodeTagArray.sort((a, b) => b.matchPercentage - a.matchPercentage);
-        return {
-            "id": snippetBlock.id,
-            "type": snippetBlock.type,
-            "outdated": snippetBlock['outdated'],
-            "obsolete": false,
-            "data": {
-              "text": updatedString.join(''),
-              "path": snippetBlock.data.path,
-              "line_start": updatedLineStart,
-              "line_end": updatedLineStart,
-              "tag": updatedCodeTagArray[0].updatedCodeTag
-            }
-          }
-        }else{
-            return {
-                "id": snippetBlock.id,
-                "type": snippetBlock.type,
-                "outdated": snippetBlock['outdated'],
-                "obsolete": true,
-                "data": {
-                  "text": snippetBlock.data.text,
-                  "path": snippetBlock.data.path,
-                  "line_start": snippetBlock.data['line_start'],
-                  "line_end": snippetBlock.data['line_end'],
-                  "tag": snippetBlock.data.tag
-                }
-            }
+        updatedCodeTagArray.sort(function(a, b){
+            return b.codeMatchPercentage - a.codeMatchPercentage;
+        });
+        return updatedCodeTagArray[0];
+    }else{
+        return null;
     }
+
+
 }
+
+async function updateCodeTag(snippetBlock){
+    const outdatedSnippet = snippetBlock.data.text.split('\n');
+    let matchThreshold = 70;
+    let multi = false;
+    const lineStart = snippetBlock.data['line_start'];
+    const lineEnd = snippetBlock.data['line_end'];
+    const codeFile = snippetBlock.data.path;
+    const fileContent = fs.readFileSync(codeFile, 'utf8');
+    let bestMatchArray = await findBestMatch(fileContent, outdatedSnippet[0], multi, matchThreshold);
+
+    if(bestMatchArray == null){
+        snippetBlock.obsolete = true;
+        return snippetBlock;
+    }
+
+    const updatedCodeTag = processCodeTag(bestMatchArray, snippetBlock);
+    if(updatedCodeTag == null){
+        snippetBlock.obsolete = true;
+        return snippetBlock;
+    }
+    snippetBlock.data['tag'] = updatedCodeTag.updatedCodeTag;
+    snippetBlock.data.text = updatedCodeTag.lineText;
+    snippetBlock.data['line_start'] = updatedCodeTag.lineNumber;
+    snippetBlock.data['line_end'] = updatedCodeTag.lineNumber;
+    snippetBlock.obsolete = false;
+    snippetBlock.outdated = false;
+    return snippetBlock;
+
+}
+
+// async function updateCodeTag(snippetBlock){
+//     console.time("Execution Time");
+//     let updatedSnippetBlock = await updateSnippet(snippetBlock);
+//     if(updatedSnippetBlock.obsolete) {
+//         return {
+//             "id": snippetBlock.id,
+//             "type": snippetBlock.type,
+//             "outdated": snippetBlock['outdated'],
+//             "obsolete": true,
+//             "data": {
+//               "text": snippetBlock.data.text,
+//               "path": snippetBlock.data.path,
+//               "line_start": snippetBlock.data['line_start'],
+//               "line_end": snippetBlock.data['line_end'],
+//               "tag": snippetBlock.data.tag
+//             }
+//           }
+//     }
+//     let updatedString = updatedSnippetBlock.data.text;
+//     let outdatedCodeTag = snippetBlock.data.tag;
+//     let updatedLineStart = updatedSnippetBlock.data['line_start'];
+
+//     let i=0, k=0;
+//     let updatedCodeTagArray = [];
+//     let newCodeTag = [];
+//     outdatedCodeTag = outdatedCodeTag.split('');
+//     updatedString = updatedString.split('');
+//     let updatedStartPos = null;
+
+//     while(i<updatedString.length){
+//         if(updatedString[i] == outdatedCodeTag[k] && isAlphanumeric(updatedString[i])){
+//             if(updatedStartPos == null){
+//                 updatedStartPos = i;
+//             }
+//             newCodeTag += updatedString[i];
+//             i++;
+//             k++;
+//         }else if(updatedString[i] != outdatedCodeTag[k] && isAlphanumeric(updatedString[i])){
+//             if(updatedStartPos == null){
+//                 updatedStartPos = i;
+//             }
+//             newCodeTag += updatedString[i];
+//             i++;
+//         }else{
+//             let matchPercentage = calculateTagMatchPer(outdatedCodeTag.join(''), newCodeTag);
+//             if(matchPercentage >= 50){
+//                 updatedCodeTagArray.push({
+//                     updatedCodeTag : newCodeTag,
+//                     matchPercentage : matchPercentage
+//                 });
+//                 newCodeTag = [];
+//                 updatedStartPos = null;
+//                 i++;
+//                 k = 0;
+//                 continue;
+//             }
+//             newCodeTag = [];
+//             updatedStartPos = null;
+//             i++;
+//             k = 0;
+//         }
+//     }
+//     if(updatedCodeTagArray.length > 0){
+//         updatedCodeTagArray.sort((a, b) => b.matchPercentage - a.matchPercentage);
+//         return {
+//             "id": snippetBlock.id,
+//             "type": snippetBlock.type,
+//             "outdated": snippetBlock['outdated'],
+//             "obsolete": false,
+//             "data": {
+//               "text": updatedString.join(''),
+//               "path": snippetBlock.data.path,
+//               "line_start": updatedLineStart,
+//               "line_end": updatedLineStart,
+//               "tag": updatedCodeTagArray[0].updatedCodeTag
+//             }
+//           }
+//         }else{
+//             return {
+//                 "id": snippetBlock.id,
+//                 "type": snippetBlock.type,
+//                 "outdated": snippetBlock['outdated'],
+//                 "obsolete": true,
+//                 "data": {
+//                   "text": snippetBlock.data.text,
+//                   "path": snippetBlock.data.path,
+//                   "line_start": snippetBlock.data['line_start'],
+//                   "line_end": snippetBlock.data['line_end'],
+//                   "tag": snippetBlock.data.tag
+//                 }
+//             }
+//     }
+// }
 
 function getChangedLineNumbers(outdatedSnippet, updatedSnippet) {
     const changedLines = [];
@@ -505,25 +592,25 @@ const updatedSnippet = [
     "client.save();"
 ];
 
-const changedLines = getChangedLineNumbers(outdatedSnippet, updatedSnippet);
-console.log(changedLines); // Output: [3, 4]
+// const changedLines = getChangedLineNumbers(outdatedSnippet, updatedSnippet);
+// console.log(changedLines); // Output: [3, 4]
 
 
 // // Example usage
 
-// const snippetBlock =     {
-//     "id": "example3",
-//     "type": "code-tag",
-//     "outdated": true,
-//     "obsolete": false,
-//     "data": {
-//       "text": "let client = await Client.findOne({apiKey: client_cred}).populate('users');",
-//       "tag": "Client",
-//       "path": "test_code_files/process_controller.js",
-//       "line_start": 49,
-//       "line_end": 49
-//     }
-//   }
+const snippetBlock =         {
+    "id": "14e3d34d-fd42-4a37-804f-fea27be607f6",
+    "obsolete": false,
+    "outdated": false,
+    "type": "token",
+    "data": {
+      "text": "const lineWithoutPlus = line.slice(1).trim();",
+      "line_start": 84,
+      "line_end": 84,
+      "path": "test_code_files/process_controller.js",
+      "tag": "lineWithoutPlus"
+    }
+  }
 
 // const snippetBlock_2 =     {
 //     "id": "example1",
@@ -554,9 +641,9 @@ console.log(changedLines); // Output: [3, 4]
 // // const result = await verifySnippet(snippetBlock);
 // // const resultPath = await verifyPath(snippetBlock);
 // // console.timeEnd("Execution Time Path");
-// // const updatedSnippetBlock = await updateSnippet(snippetBlock_3);
+const updatedSnippetBlock = await updateCodeTag(snippetBlock);
 // // console.timeEnd("Execution Time");
-// // console.log(updatedSnippetBlock);
+console.log(updatedSnippetBlock);
 // // console.log(result);
 
 // // const matchPer = calculateTagMatchPer('Client', 'Client');

@@ -1,6 +1,5 @@
 {
-  "name": "walkthru-algo-updated",
-  "version": "1.0.0",
+  "name": "walkthru-algo",
   "description": "v1 algorithm for auto-updation",
   "main": "index.js",
   "type": "module",
@@ -8,5 +7,10 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Saksham Gupta",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "gitdiff-parser": "^0.3.1",
+    "openai": "^4.56.0",
+    "worker-thread": "^1.1.0"
+  }
 }
